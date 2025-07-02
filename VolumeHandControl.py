@@ -14,7 +14,7 @@ cap.set(3, wCam)
 cap.set(4, hCam)
 pTime = 0
 
-detector = htm.handDetector(detectionCon=0.7)
+detector = htm.handDetector(maxHands=1, detectionCon=0.7)
 
 devices = AudioUtilities.GetSpeakers()
 interface =  devices.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
@@ -70,7 +70,7 @@ while True:
     fps = 1 / (cTime - pTime)
     pTime = cTime
 
-    cv2.putText(img, f'FPS:{int(fps)}', (40, 50), cv2.FONT_HERSHEY_COMPLEX,
+    cv2.putText(img, f'FPS: {int(fps)}', (40, 50), cv2.FONT_HERSHEY_COMPLEX,
                 1, (0, 0, 255), 2)
 
     cv2.imshow("Frame", img)
