@@ -6,8 +6,14 @@
 - pycaw 20181226
 
 ---  
+## Content
 - [x] HandTrackingModule   
-- [x] VolumeHandControl   
+- [x] VolumeHandControl
+- [ ] AIVirtualMouse
+  - [x] move
+  - [x] detection of out of control zone
+  - [x] left click
+  - [ ] right click
 
 ---  
 ## Reference:  
