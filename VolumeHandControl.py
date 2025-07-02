@@ -34,6 +34,7 @@ while True:
     success, img = cap.read()
     img = detector.findHands(img)
     lmList = detector.findPosition(img, draw=False)
+    volume.SetMasterVolumeLevelScalar(0, None)  # 安全默认值
     if len(lmList) != 0:
         # print(lmList[4], lmList[8])
 
@@ -52,11 +53,16 @@ while True:
         # Hand range: 50 ~ 300
         # Volume range: -96 ~ 0
 
-        vol = np.interp(length, [100, 270], [minVol, maxVol])
+        # vol = np.interp(length, [100, 270], [minVol, maxVol])
+        # volBar = np.interp(length, [100, 270], [400, 150])
+        # volPer = np.interp(length, [100, 270], [0, 100])
+        volPer = np.interp(length, [100, 270], [0, 100]) # 画面音量
+        volScalar = np.interp(length, [100, 270], [0.0, 1.0]) # 实际系统音量
+        volScalar = np.clip(volScalar, 0.0, 1.0) # 防止过界
+        volume.SetMasterVolumeLevelScalar(volScalar, None)
         volBar = np.interp(length, [100, 270], [400, 150])
-        volPer = np.interp(length, [100, 270], [0, 100])
-        print(int(length), vol)
-        volume.SetMasterVolumeLevel(vol, None)
+        print(int(length), f"Volume %: {int(volPer)}")
+        # volume.SetMasterVolumeLevel(vol, None)
 
         if length < 50:
             cv2.circle(img, (cx, cy), 15, (255, 0, 255), cv2.FILLED)
