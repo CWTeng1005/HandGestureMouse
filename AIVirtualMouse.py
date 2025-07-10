@@ -7,12 +7,14 @@ import autopy
 ##################################
 wCam, hCam = 640, 480
 frameR = 100 # frame reduction
-smoothening = 8
+smoothening = 5
+warning_active = False
 ##################################
 
 pTime = 0
 plocX, plocY = 0, 0
 clocX, clocY = 0, 0
+warning_image = np.zeros((100, 400, 3), dtype=np.uint8)
 cap = cv2.VideoCapture(0)
 cap.set(3, wCam)
 cap.set(4, hCam)
@@ -51,7 +53,7 @@ while True:
             clocX = np.clip(clocX, 0, wScr - 1)
             clocY = np.clip(clocY, 0, hScr - 1)
             # 7. Move Mouse
-            autopy.mouse.move(x3, y3)
+            autopy.mouse.move(clocX, clocY)
             # autopy.mouse.move(wScr - clocX, clocY)
             cv2.circle(img, (x1, y1), 12, (125, 0, 125), cv2.FILLED)
             plocX, plocY = clocX, clocY
@@ -66,6 +68,18 @@ while True:
                 cv2.circle(img, (lineInfo[4], lineInfo[5]), 12, (150, 0, 150), cv2.FILLED)
                 autopy.mouse.click()
 
+        # 出界监测
+        out_of_bounds = x1 < frameR or x1 > wCam - frameR or y1 < frameR or y1 > hCam - frameR
+        if out_of_bounds and not warning_active:
+            warning_image[:] = 0 # 清空背景
+            cv2.putText(warning_image, "Out of control zone!", (20, 60),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+            cv2.imshow("Warning", warning_image)
+            warning_active = True
+        elif not out_of_bounds and warning_active:
+            cv2.destroyWindow("Warning")
+            warning_active = False
+
     # 11. Frame Rate
     cTime = time.time()
     fps = 1 / (cTime - pTime)
@@ -75,5 +89,6 @@ while True:
 
     # 12. Display
     cv2.imshow("Frame", img)
+
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
