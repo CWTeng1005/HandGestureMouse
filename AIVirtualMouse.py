@@ -41,7 +41,7 @@ while True:
 
         cv2.rectangle(img, (frameR, frameR), (wCam - frameR, hCam - frameR), (200, 0, 200), 2)
         # 4. Only Index Finger: Moving Mode
-        if fingers[1] == 1 and fingers[2] == 0:
+        if fingers[1] == 1 and fingers[2] == 0 and fingers[0] == 0 and fingers[3] == 0 and fingers[4] == 0:
 
             # 5. Convert Coordinates
             x3 = np.interp(x1, (frameR, wCam - frameR), (0, wScr))
@@ -59,14 +59,22 @@ while True:
             plocX, plocY = clocX, clocY
 
         # 8. Both Index and Middle fingers are up: Clicking Mode
+        # 判断是否举起食指和中指（右键）或食指和拇指（左键）
         if fingers[1] == 1 and fingers[2] == 1:
             # 9. Find distance between fingers
-            length, img, lineInfo = detector.findDistance(8, 12, img)
-            print(length)
+            index_middle_len, img, lineInfo = detector.findDistance(8, 12, img)
+            # print(index_middle_len)
             # 10. Click mouse if distance short
-            if length < 25:
+            if index_middle_len < 25:
+                autopy.mouse.click(button=autopy.mouse.Button.RIGHT)
                 cv2.circle(img, (lineInfo[4], lineInfo[5]), 12, (150, 0, 150), cv2.FILLED)
-                autopy.mouse.click()
+
+        if fingers[1] == 1 and fingers[0] == 1:
+            # 拇指 + 食指：左键
+            thumb_index_len, img, lineInfo = detector.findDistance(4, 8, img)
+            if thumb_index_len < 30:
+                autopy.mouse.click()    # 默认左键
+                cv2.circle(img, (lineInfo[4], lineInfo[5]), 12, (150, 0, 150), cv2.FILLED)
 
         # 出界监测
         out_of_bounds = x1 < frameR or x1 > wCam - frameR or y1 < frameR or y1 > hCam - frameR
@@ -86,6 +94,8 @@ while True:
     pTime = cTime
     cv2.putText(img, f'FPS: {int(fps)}', (40, 50), cv2.FONT_HERSHEY_COMPLEX,
                 0.5, (0, 0, 255), 2)
+    cv2.putText(img, f"Mode: MOUSE", (450, 30), cv2.FONT_HERSHEY_SIMPLEX,
+                0.5, (255, 255, 255), 2)
 
     # 12. Display
     cv2.imshow("Frame", img)
