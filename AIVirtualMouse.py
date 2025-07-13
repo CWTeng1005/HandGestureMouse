@@ -7,8 +7,8 @@ import pyautogui
 
 ##################################
 wCam, hCam = 640, 480
-frameR = 100 # frame reduction
-smoothening = 5
+frameR = 120 # frame reduction
+smoothening = 4
 warning_active = False
 ##################################
 
@@ -63,14 +63,26 @@ while True:
                     left_click_time = time.time()
                     cv2.circle(img, (lineInfo[4], lineInfo[5]), 12, (150, 0, 150), cv2.FILLED)
 
+        # 左键双击：食指 + 中指 + 无名指靠近（无拇指）
+        if fingers == [0, 1, 1, 1, 0]:
+            d1, img, _ = detector.findDistance(8, 12, img)  # 食指-中指
+            d2, img, _ = detector.findDistance(12, 16, img)  # 中指-无名指
+            cv2.putText(img, "Double Click", (400, 70), cv2.FONT_HERSHEY_SIMPLEX,
+                        0.5, (0, 0, 0), 2)
+            if d1 < 25 and d2 < 25 and time.time() - left_click_time > 1.2:
+                autopy.mouse.click()
+                autopy.mouse.click()
+                left_click_time = time.time()
+
         # 滚动：小拇指向上或向下
         if fingers[0] == 0 and fingers[1] == 0 and fingers[2] == 0 and fingers[3] == 0 and fingers[4] == 1:
             cv2.putText(img, f"Mode: MOUSE - Scroll", (400, 50), cv2.FONT_HERSHEY_SIMPLEX,
                         0.5, (0, 0, 0), 2)
-            pinky_y = lmList[20][2]
+            pinky_x, pinky_y = lmList[20][1:]
             upper_threshold = 160   # 举得比较高（往上滚）
-            lower_threshold = 320   # 放得比较低（往下滚）
+            lower_threshold = 300   # 放得比较低（往下滚）
             scroll_speed = 100   # 可调节滚动速度
+            cv2.circle(img, (pinky_x, pinky_y), 12, (125, 0, 125), cv2.FILLED)
             if pinky_y < upper_threshold:
                 pyautogui.scroll(scroll_speed)  # 往上滚
                 cv2.putText(img, f"SCROLL UP", (400, 70), cv2.FONT_HERSHEY_SIMPLEX,
@@ -95,16 +107,33 @@ while True:
             plocX, plocY = clocX, clocY
 
         # 出界监测
-        out_of_bounds = x1 < frameR or x1 > wCam - frameR or y1 < frameR or y1 > hCam - frameR
-        if out_of_bounds and not warning_active:
-            warning_image[:] = 0 # 清空背景
-            cv2.putText(warning_image, "Out of control zone!", (20, 60),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-            cv2.imshow("Warning", warning_image)
-            warning_active = True
-        elif not out_of_bounds and warning_active:
-            cv2.destroyWindow("Warning")
-            warning_active = False
+        margin = 50
+        ref_x, ref_y = None, None
+        if fingers == [0, 1, 0, 0, 0]:  # 移动用食指
+            ref_x, ref_y = lmList[8][1:]
+        elif fingers == [0, 0, 0, 0, 1]:  # 滚动用小拇指
+            ref_x, ref_y = lmList[20][1:]
+        elif fingers == [0, 1, 1, 0, 0]:  # 右键
+            ref_x, ref_y = lmList[12][1:]
+        elif fingers == [1, 1, 0, 0, 0]:  # 左键
+            ref_x, ref_y = lmList[4][1:]
+        elif fingers == [0, 1, 1, 1, 0]:  # 左键双击
+            ref_x, ref_y = lmList[12][1:]
+
+        if ref_x is not None:
+            out_of_bounds = (
+                    ref_x < frameR - margin or ref_x > wCam - frameR + margin or
+                    ref_y < frameR - margin or ref_y > hCam - frameR + margin
+            )
+            if out_of_bounds and not warning_active:
+                warning_image[:] = 0
+                cv2.putText(warning_image, "Out of control zone!", (20, 60),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+                cv2.imshow("Warning", warning_image)
+                warning_active = True
+            elif not out_of_bounds and warning_active:
+                cv2.destroyWindow("Warning")
+                warning_active = False
 
     # Frame Rate
     cTime = time.time()

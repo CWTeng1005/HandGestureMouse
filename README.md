@@ -4,16 +4,20 @@
 - mediapipe 0.10.9  
 - opencv-python 4.5.1.48
 - pycaw 20181226
+- PyAutoGui 0.9.54
 
 ---  
 ## Content
 - [x] HandTrackingModule   
 - [x] VolumeHandControl
-- [ ] AIVirtualMouse
+- [x] AIVirtualMouse
   - [x] move
   - [x] detection of out of control zone
   - [x] left click
-  - [ ] right click
+  - [x] right click
+  - [x] double click
+  - [x] scroll up
+  - [x] scroll down
 
 ---  
 ## Reference:  
