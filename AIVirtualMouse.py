@@ -42,7 +42,7 @@ while True:
         cv2.rectangle(img, (frameR, frameR), (wCam - frameR, hCam - frameR), (200, 0, 200), 2)
 
         # 右键：食指 + 中指
-        if fingers[0] == 1 and fingers[1] == 1 and fingers[2] == 1:
+        if fingers[0] == 1 and fingers[1] == 1 and fingers[2] == 1 and fingers[3] == 0 and fingers[4] == 0:
             cv2.putText(img, f"Mode: MOUSE - Right Click", (400, 50), cv2.FONT_HERSHEY_SIMPLEX,
                         0.5, (0, 0, 0), 2)
             index_middle_len, img, lineInfo = detector.findDistance(8, 12, img)
@@ -63,17 +63,22 @@ while True:
                     left_click_time = time.time()
                     cv2.circle(img, (lineInfo[4], lineInfo[5]), 12, (150, 0, 150), cv2.FILLED)
 
-        # 滚动：三指（食指 + 中指 + 无名指）向上或向下
-        if fingers[1] == 1 and fingers[2] == 1 and fingers[3] == 1:
+        # 滚动：小拇指向上或向下
+        if fingers[0] == 0 and fingers[1] == 0 and fingers[2] == 0 and fingers[3] == 0 and fingers[4] == 1:
             cv2.putText(img, f"Mode: MOUSE - Scroll", (400, 50), cv2.FONT_HERSHEY_SIMPLEX,
                         0.5, (0, 0, 0), 2)
-            y_vals = [lmList[8][2], lmList[12][2], lmList[16][2]]
-            avg_y = sum(y_vals) / 3
-            delta_y = avg_y - globals().get('scroll_base_y', avg_y)
-            if abs(delta_y) > 20:
-                direction = -1 if delta_y < 0 else 1
-                pyautogui.scroll(300 * -direction)
-            scroll_base_y = avg_y
+            pinky_y = lmList[20][2]
+            upper_threshold = 160   # 举得比较高（往上滚）
+            lower_threshold = 320   # 放得比较低（往下滚）
+            scroll_speed = 100   # 可调节滚动速度
+            if pinky_y < upper_threshold:
+                pyautogui.scroll(scroll_speed)  # 往上滚
+                cv2.putText(img, f"SCROLL UP", (400, 70), cv2.FONT_HERSHEY_SIMPLEX,
+                            0.5, (0, 0, 0), 2)
+            elif pinky_y > lower_threshold:
+                pyautogui.scroll(-scroll_speed) # 往下滚
+                cv2.putText(img, f"SCROLL DOWN", (400, 70), cv2.FONT_HERSHEY_SIMPLEX,
+                            0.5, (0, 0, 0), 2)
 
         # 鼠标移动：食指
         if fingers[0] == 0 and fingers[1] == 1 and fingers[2] == 0 and fingers[3] == 0 and fingers[4] == 0:
