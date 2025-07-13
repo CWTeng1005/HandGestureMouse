@@ -3,6 +3,7 @@ import numpy as np
 import HandTrackingModule as htm
 import time
 import autopy
+import pyautogui
 
 ##################################
 wCam, hCam = 640, 480
@@ -20,6 +21,8 @@ cap.set(3, wCam)
 cap.set(4, hCam)
 detector = htm.handDetector(maxHands=1)
 wScr, hScr = autopy.screen.size()
+right_click_time = time.time()
+left_click_time = time.time()
 # print(wScr, hScr)
 # 1920, 1080
 
@@ -33,48 +36,58 @@ while True:
     if len(lmList) != 0:
         x1, y1 = lmList[8][1:]
         x2, y2 = lmList[12][1:]
-        # print(x1, y1, x2, y2)
-
         # 3. Check which fingers are up
         fingers = detector.fingersUp()
         # print(fingers)
-
         cv2.rectangle(img, (frameR, frameR), (wCam - frameR, hCam - frameR), (200, 0, 200), 2)
-        # 4. Only Index Finger: Moving Mode
-        if fingers[1] == 1 and fingers[2] == 0 and fingers[0] == 0 and fingers[3] == 0 and fingers[4] == 0:
 
-            # 5. Convert Coordinates
+        # 右键：食指 + 中指
+        if fingers[0] == 1 and fingers[1] == 1 and fingers[2] == 1:
+            cv2.putText(img, f"Mode: MOUSE - Right Click", (400, 50), cv2.FONT_HERSHEY_SIMPLEX,
+                        0.5, (0, 0, 0), 2)
+            index_middle_len, img, lineInfo = detector.findDistance(8, 12, img)
+            if index_middle_len < 25:
+                if time.time() - right_click_time > 0.8:
+                    autopy.mouse.click(button=autopy.mouse.Button.RIGHT)
+                    right_click_time = time.time()
+                    cv2.circle(img, (lineInfo[4], lineInfo[5]), 12, (150, 0, 150), cv2.FILLED)
+
+        # 左键：拇指 + 食指
+        if fingers[0] == 0 and fingers[1] == 1 and fingers[2] == 1 and fingers[3] == 0 and fingers[4] == 0:
+            cv2.putText(img, f"Mode: MOUSE - Left Click", (400, 50), cv2.FONT_HERSHEY_SIMPLEX,
+                        0.5, (0, 0, 0), 2)
+            d2, img, lineInfo = detector.findDistance(8, 12, img)
+            if d2 < 30:
+                if time.time() - left_click_time > 0.8:
+                    autopy.mouse.click()    # 默认左键
+                    left_click_time = time.time()
+                    cv2.circle(img, (lineInfo[4], lineInfo[5]), 12, (150, 0, 150), cv2.FILLED)
+
+        # 滚动：三指（食指 + 中指 + 无名指）向上或向下
+        if fingers[1] == 1 and fingers[2] == 1 and fingers[3] == 1:
+            cv2.putText(img, f"Mode: MOUSE - Scroll", (400, 50), cv2.FONT_HERSHEY_SIMPLEX,
+                        0.5, (0, 0, 0), 2)
+            y_vals = [lmList[8][2], lmList[12][2], lmList[16][2]]
+            avg_y = sum(y_vals) / 3
+            delta_y = avg_y - globals().get('scroll_base_y', avg_y)
+            if abs(delta_y) > 20:
+                direction = -1 if delta_y < 0 else 1
+                pyautogui.scroll(300 * -direction)
+            scroll_base_y = avg_y
+
+        # 鼠标移动：食指
+        if fingers[0] == 0 and fingers[1] == 1 and fingers[2] == 0 and fingers[3] == 0 and fingers[4] == 0:
+            cv2.putText(img, f"Mode: MOUSE - Moving", (400, 50), cv2.FONT_HERSHEY_SIMPLEX,
+                        0.5, (0, 0, 0), 2)
             x3 = np.interp(x1, (frameR, wCam - frameR), (0, wScr))
             y3 = np.interp(y1, (frameR, hCam - frameR), (0, hScr))
-
-            # 6. Smoothen Values
             clocX = plocX + (x3 - plocX) / smoothening
             clocY = plocY + (y3 - plocY) / smoothening
             clocX = np.clip(clocX, 0, wScr - 1)
             clocY = np.clip(clocY, 0, hScr - 1)
-            # 7. Move Mouse
             autopy.mouse.move(clocX, clocY)
-            # autopy.mouse.move(wScr - clocX, clocY)
             cv2.circle(img, (x1, y1), 12, (125, 0, 125), cv2.FILLED)
             plocX, plocY = clocX, clocY
-
-        # 8. Both Index and Middle fingers are up: Clicking Mode
-        # 判断是否举起食指和中指（右键）或食指和拇指（左键）
-        if fingers[1] == 1 and fingers[2] == 1:
-            # 9. Find distance between fingers
-            index_middle_len, img, lineInfo = detector.findDistance(8, 12, img)
-            # print(index_middle_len)
-            # 10. Click mouse if distance short
-            if index_middle_len < 25:
-                autopy.mouse.click(button=autopy.mouse.Button.RIGHT)
-                cv2.circle(img, (lineInfo[4], lineInfo[5]), 12, (150, 0, 150), cv2.FILLED)
-
-        if fingers[1] == 1 and fingers[0] == 1:
-            # 拇指 + 食指：左键
-            thumb_index_len, img, lineInfo = detector.findDistance(4, 8, img)
-            if thumb_index_len < 30:
-                autopy.mouse.click()    # 默认左键
-                cv2.circle(img, (lineInfo[4], lineInfo[5]), 12, (150, 0, 150), cv2.FILLED)
 
         # 出界监测
         out_of_bounds = x1 < frameR or x1 > wCam - frameR or y1 < frameR or y1 > hCam - frameR
@@ -88,17 +101,18 @@ while True:
             cv2.destroyWindow("Warning")
             warning_active = False
 
-    # 11. Frame Rate
+    # Frame Rate
     cTime = time.time()
     fps = 1 / (cTime - pTime)
     pTime = cTime
-    cv2.putText(img, f'FPS: {int(fps)}', (40, 50), cv2.FONT_HERSHEY_COMPLEX,
+    cv2.putText(img, f'FPS: {int(fps)}', (40, 30), cv2.FONT_HERSHEY_COMPLEX,
                 0.5, (0, 0, 255), 2)
-    cv2.putText(img, f"Mode: MOUSE", (450, 30), cv2.FONT_HERSHEY_SIMPLEX,
-                0.5, (255, 255, 255), 2)
+    cv2.putText(img, f"Mode: MOUSE", (400, 30), cv2.FONT_HERSHEY_SIMPLEX,
+                0.5, (0, 0, 0), 2)
 
-    # 12. Display
+    # Display
     cv2.imshow("Frame", img)
 
+    # press 'Q' to exit
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
