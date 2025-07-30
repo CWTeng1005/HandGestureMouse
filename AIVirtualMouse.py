@@ -21,7 +21,7 @@ pTime = 0
 plocX, plocY = 0, 0
 clocX, clocY = 0, 0
 warning_image = np.zeros((100, 400, 3), dtype=np.uint8)
-cap = cv2.VideoCapture(2)
+cap = cv2.VideoCapture(1)
 cap.set(3, wCam)
 cap.set(4, hCam)
 detector = htm.handDetector(maxHands=1)
@@ -37,7 +37,7 @@ left_click_time = time.time()
 def create_launcher():
     root = tk.Tk()
     root.title("Launcher")
-    root.geometry("150x80+100+100")
+    root.geometry("160x120+100+100")
     root.attributes("-topmost", True)
 
     def toggle_system_keyboard():
@@ -45,11 +45,28 @@ def create_launcher():
             if proc.info['name'] == 'TabTip.exe':
                 os.system('taskkill /IM TabTip.exe /F')
                 return
-
         subprocess.Popen(["explorer.exe", r"C:\Program Files\Common Files\Microsoft Shared\ink\TabTip.exe"])
 
-    btn = tk.Button(root, text="Keyboard", height=1, width=10, command=toggle_system_keyboard)
-    btn.pack(expand=True, fill=tk.BOTH)
+    def run_pluck_string():
+        import pluck_string
+        pluck_string.run_game()
+        print("Pluck String Launched.")
+
+    def run_sand_flow():
+        # import sand_flow.run()
+        print("Sand Flow Launched.")
+
+    def open_destress_menu():
+        menu = tk.Toplevel(root)
+        menu.title("De-Stress Games")
+        menu.geometry("200x150+200+200")
+        menu.attributes("-topmost", True)
+        tk.Button(menu, text="Pluck String", width=15, command=run_pluck_string).pack(pady=5)
+        tk.Button(menu, text="Sand Flow", width=15, command=run_sand_flow).pack(pady=5)
+
+    tk.Button(root, text="Keyboard", height=1, width=10, command=toggle_system_keyboard).pack(pady=5, fill=tk.X)
+    tk.Button(root, text="De-Stress", height=1, width=10, command=open_destress_menu).pack(pady=5, fill=tk.X)
+
     root.mainloop()
 
 # 用线程启动 GUI
