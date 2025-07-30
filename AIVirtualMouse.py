@@ -4,6 +4,11 @@ import HandTrackingModule as htm
 import time
 import autopy
 import pyautogui
+import threading
+import tkinter as tk
+import os
+import subprocess
+import psutil
 
 ##################################
 wCam, hCam = 640, 480
@@ -16,7 +21,7 @@ pTime = 0
 plocX, plocY = 0, 0
 clocX, clocY = 0, 0
 warning_image = np.zeros((100, 400, 3), dtype=np.uint8)
-cap = cv2.VideoCapture(0)
+cap = cv2.VideoCapture(2)
 cap.set(3, wCam)
 cap.set(4, hCam)
 detector = htm.handDetector(maxHands=1)
@@ -26,6 +31,33 @@ left_click_time = time.time()
 # print(wScr, hScr)
 # 1920, 1080
 
+################################## 虚拟键盘 ##################################
+
+# 屏幕按钮窗口
+def create_launcher():
+    root = tk.Tk()
+    root.title("Launcher")
+    root.geometry("150x80+100+100")
+    root.attributes("-topmost", True)
+
+    def toggle_system_keyboard():
+        for proc in psutil.process_iter(['name']):
+            if proc.info['name'] == 'TabTip.exe':
+                os.system('taskkill /IM TabTip.exe /F')
+                return
+
+        subprocess.Popen(["explorer.exe", r"C:\Program Files\Common Files\Microsoft Shared\ink\TabTip.exe"])
+
+    btn = tk.Button(root, text="Keyboard", height=1, width=10, command=toggle_system_keyboard)
+    btn.pack(expand=True, fill=tk.BOTH)
+    root.mainloop()
+
+# 用线程启动 GUI
+threading.Thread(target=create_launcher, daemon=True).start()
+
+################################## 虚拟键盘 ##################################
+
+################################## 虚拟鼠标 ##################################
 while True:
     # 1. Find landmarks
     success, img = cap.read()
@@ -134,6 +166,8 @@ while True:
             elif not out_of_bounds and warning_active:
                 cv2.destroyWindow("Warning")
                 warning_active = False
+
+    ################################## 虚拟鼠标 ##################################
 
     # Frame Rate
     cTime = time.time()
