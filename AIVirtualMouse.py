@@ -10,12 +10,11 @@ import os
 import subprocess
 import psutil
 
-##################################
+############################################################################
 wCam, hCam = 640, 480
 frameR = 120 # frame reduction
 smoothening = 4
 warning_active = False
-##################################
 
 pTime = 0
 plocX, plocY = 0, 0
@@ -30,6 +29,10 @@ right_click_time = time.time()
 left_click_time = time.time()
 # print(wScr, hScr)
 # 1920, 1080
+
+dragging = False
+in_standby = False
+############################################################################
 
 ################################## 虚拟键盘 ##################################
 
@@ -99,6 +102,27 @@ while True:
         fingers = detector.fingersUp()
         # print(fingers)
         cv2.rectangle(img, (frameR, frameR), (wCam - frameR, hCam - frameR), (200, 0, 200), 2)
+
+        # 拖拽逻辑
+        if fingers == [1, 1, 1, 1, 1]:  # 伸出五指，待机状态
+            in_standby = True
+            if dragging:
+                pyautogui.mouseUp() # 释放左键
+                dragging = False
+            cv2.putText(img, f"Mode: MOUSE - Standby", (400, 50), cv2.FONT_HERSHEY_SIMPLEX,
+                        0.5, (0, 0, 0), 2)
+
+        elif fingers == [0, 0, 0, 0, 0] and in_standby and not dragging:
+            pyautogui.mouseDown()   # 按下左键
+            dragging = True
+            in_standby = False  # 退出待机状态
+            cv2.putText(img, f"Mode: MOUSE - Dragging", (400, 50), cv2.FONT_HERSHEY_SIMPLEX,
+                        0.5, (0, 0, 0), 2)
+
+        if dragging:
+            # 拖拽中但没有收拳，显示模式
+            cv2.putText(img, f"Mode: MOUSE - Dragging", (400, 50), cv2.FONT_HERSHEY_SIMPLEX,
+                        0.5, (0, 0, 0), 2)
 
         # 右键：食指 + 中指
         if fingers[0] == 1 and fingers[1] == 1 and fingers[2] == 1 and fingers[3] == 0 and fingers[4] == 0:
@@ -178,6 +202,8 @@ while True:
             ref_x, ref_y = lmList[4][1:]
         elif fingers == [0, 1, 1, 1, 0]:  # 左键双击
             ref_x, ref_y = lmList[12][1:]
+        elif dragging:  # 拖拽
+            ref_x, ref_y = lmList[0][1:]
 
         if ref_x is not None:
             out_of_bounds = (
