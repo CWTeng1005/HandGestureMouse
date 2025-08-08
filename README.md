@@ -21,7 +21,7 @@
   - [x] double click
   - [x] scroll up
   - [x] scroll down
-  - [ ] drag
+  - [x] drag
   - [x] menu
   - [x] virtual keyboard
 - [x] ASMR Mixer
