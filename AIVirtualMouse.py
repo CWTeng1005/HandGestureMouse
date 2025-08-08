@@ -10,6 +10,26 @@ import os
 import subprocess
 import psutil
 
+################################## 音量控制 ##################################
+try:
+    from ctypes import POINTER, cast
+    from comtypes import CLSCTX_ALL
+    from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
+    _PYCAW_OK = True
+except Exception:
+    _PYCAW_OK = False
+
+# 开关与接口
+volume_mode = False
+if _PYCAW_OK:
+    try:
+        devices = AudioUtilities.GetSpeakers()
+        interface = devices.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
+        endpoint = cast(interface, POINTER(IAudioEndpointVolume))
+    except Exception:
+        _PYCAW_OK = False
+################################## 音量控制 ##################################
+
 ############################################################################
 wCam, hCam = 640, 480
 frameR = 120 # frame reduction
@@ -32,15 +52,15 @@ left_click_time = time.time()
 
 dragging = False
 in_standby = False
+
 ############################################################################
 
-################################## 虚拟键盘 ##################################
+################################## Launcher（置顶+不阻塞） ##################################
 
-# 屏幕按钮窗口
 def create_launcher():
     root = tk.Tk()
     root.title("Launcher")
-    root.geometry("160x150+100+100")
+    root.geometry("160x200+100+600")
     root.attributes("-topmost", True)
 
     def toggle_system_keyboard():
@@ -50,19 +70,31 @@ def create_launcher():
                 return
         subprocess.Popen(["explorer.exe", r"C:\Program Files\Common Files\Microsoft Shared\ink\TabTip.exe"])
 
+    # 后台线程启动 ASMR Mixer，避免阻塞 Launcher
     def run_asmr_mixer():
-        import asmr_mixer
-        asmr_mixer.run_game()
-        print("ASMR Mixer Launched.")
+        def _run():
+            try:
+                import asmr_mixer
+                asmr_mixer.run_game()
+                print("ASMR Mixer Launched.")
+            except Exception as e:
+                print("ASMR Mixer error:", e)
+        threading.Thread(target=_run, daemon=True).start()
 
     def run_sand_flow():
-        # import sand_flow.run()
-        print("Sand Flow Launched.")
+        print("Sand Flow Launched.")  # 占位
+
+    # 音量控制开关按钮 & F9 快捷键
+    def toggle_volume_mode(event=None):
+        global volume_mode
+        volume_mode = not volume_mode
+        print(f"[VolumeMode] -> {volume_mode}")
+        vol_btn.config(text=f"Volume: {'ON' if volume_mode else 'OFF'}")
 
     def open_destress_menu():
         menu = tk.Toplevel(root)
         menu.title("De-Stress Games")
-        menu.geometry("200x150+200+200")
+        menu.geometry("200x150+400+600")
         menu.attributes("-topmost", True)
 
         def return_launcher():
@@ -78,14 +110,26 @@ def create_launcher():
 
     tk.Button(root, text="Keyboard", height=1, width=10, command=toggle_system_keyboard).pack(pady=5, fill=tk.X)
     tk.Button(root, text="De-Stress", height=1, width=10, command=open_destress_menu).pack(pady=5, fill=tk.X)
+    vol_btn = tk.Button(root, text="Volume: OFF", height=1, width=10, command=toggle_volume_mode)
+    vol_btn.pack(pady=5, fill=tk.X)
     tk.Button(root, text="Exit", height=1, width=10, command=quit_all).pack(pady=5, fill=tk.X)
+
+    # F9 切换音量开关（窗口有焦点时）
+    root.bind("<F9>", toggle_volume_mode)
+
+    # 保持置顶（每秒提升一次）
+    def keep_topmost():
+        try:
+            root.lift()
+            root.attributes("-topmost", True)
+        finally:
+            root.after(1000, keep_topmost)
+    keep_topmost()
 
     root.mainloop()
 
-# 用线程启动 GUI
+# 用线程启动 GUI（非阻塞）
 threading.Thread(target=create_launcher, daemon=True).start()
-
-################################## 虚拟键盘 ##################################
 
 ################################## 虚拟鼠标 ##################################
 while True:
@@ -103,25 +147,47 @@ while True:
         # print(fingers)
         cv2.rectangle(img, (frameR, frameR), (wCam - frameR, hCam - frameR), (200, 0, 200), 2)
 
-        # 拖拽逻辑
+        # —— 音量控制（仅在开关打开且 pycaw 可用；算法 100~270 → 0..1）——
+        if volume_mode and _PYCAW_OK:
+            # 手势：拇指+食指伸出，其它尽量收（避免和现有右键/双击/滚动冲突）
+            if fingers == [1, 1, 0, 0, 0]:
+                d, img, _ = detector.findDistance(4, 8, img)  # 拇指尖(4) - 食指尖(8)
+                vol_scalar = np.interp(d, [100, 270], [0.0, 1.0])
+                vol_scalar = float(np.clip(vol_scalar, 0.0, 1.0))
+                try:
+                    endpoint.SetMasterVolumeLevelScalar(vol_scalar, None)
+                except Exception:
+                    pass  # 防止偶发 COM 异常中断
+
+                # 画面提示（侧边条与百分比）
+                vol_per = int(vol_scalar * 100)
+                cv2.putText(img, "Mode: VOLUME", (400, 90), cv2.FONT_HERSHEY_SIMPLEX,
+                            0.5, (0, 0, 0), 2)
+                cv2.rectangle(img, (50, 147), (60, 403), (0, 0, 0), 2)
+                bar_y = int(np.interp(d, [100, 270], [400, 150]))
+                cv2.rectangle(img, (53, bar_y), (57, 400), (255, 255, 255), cv2.FILLED)
+                cv2.putText(img, f'{vol_per} %', (40, 450), cv2.FONT_HERSHEY_COMPLEX,
+                            1, (255, 255, 255), 2)
+
+        # 拖拽逻辑（五指=待机；拳头=开始拖拽；回五指=释放）
         if fingers == [1, 1, 1, 1, 1]:  # 伸出五指，待机状态
             in_standby = True
             if dragging:
                 pyautogui.mouseUp() # 释放左键
                 dragging = False
-            cv2.putText(img, f"Mode: MOUSE - Standby", (400, 50), cv2.FONT_HERSHEY_SIMPLEX,
+            cv2.putText(img, f"Mode: MOUSE - Standby", (400, 80), cv2.FONT_HERSHEY_SIMPLEX,
                         0.5, (0, 0, 0), 2)
 
         elif fingers == [0, 0, 0, 0, 0] and in_standby and not dragging:
             pyautogui.mouseDown()   # 按下左键
             dragging = True
             in_standby = False  # 退出待机状态
-            cv2.putText(img, f"Mode: MOUSE - Dragging", (400, 50), cv2.FONT_HERSHEY_SIMPLEX,
+            cv2.putText(img, f"Mode: MOUSE - Dragging", (400, 80), cv2.FONT_HERSHEY_SIMPLEX,
                         0.5, (0, 0, 0), 2)
 
         if dragging:
             # 拖拽中但没有收拳，显示模式
-            cv2.putText(img, f"Mode: MOUSE - Dragging", (400, 50), cv2.FONT_HERSHEY_SIMPLEX,
+            cv2.putText(img, f"Mode: MOUSE - Dragging", (400, 80), cv2.FONT_HERSHEY_SIMPLEX,
                         0.5, (0, 0, 0), 2)
 
         # 右键：食指 + 中指
