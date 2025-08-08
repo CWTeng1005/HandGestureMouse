@@ -11,9 +11,9 @@
 
 ---  
 ## Content
-- [x] HandTrackingModule   
-- [x] VolumeHandControl
-- [x] AIVirtualMouse
+- [x] Hand Tracking Module   
+- [x] Volume Hand Control
+- [x] AI Virtual Mouse
   - [x] move
   - [x] detection of out of control zone
   - [x] left click
@@ -25,6 +25,7 @@
   - [x] menu
   - [x] virtual keyboard
 - [x] ASMR Mixer
+- [ ] Simple Calculator
 
 ---  
 ## Reference:  
