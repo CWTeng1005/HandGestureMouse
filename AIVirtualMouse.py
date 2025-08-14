@@ -10,6 +10,9 @@ import os
 import subprocess
 import psutil
 
+from gesture_calculator import GestureCalculator
+from left_digit_controller import LeftDigitRecognizer   # ← 新：左手数字识别
+
 ################################## ↓ 音量控制 ↓ ##################################
 try:
     from ctypes import POINTER, cast
@@ -32,7 +35,7 @@ if _PYCAW_OK:
 
 ############################################################################
 wCam, hCam = 640, 480
-frameR = 120 # frame reduction
+frameR = 120  # frame reduction
 smoothening = 4
 warning_active = False
 
@@ -40,15 +43,26 @@ pTime = 0
 plocX, plocY = 0, 0
 clocX, clocY = 0, 0
 warning_image = np.zeros((100, 400, 3), dtype=np.uint8)
+
 cap = cv2.VideoCapture(0)
 cap.set(3, wCam)
 cap.set(4, hCam)
-detector = htm.handDetector(maxHands=1)
+
+detector = htm.handDetector(maxHands=1)  # 右手鼠标用；左手数字由 LeftDigitRecognizer 自己跑
 wScr, hScr = autopy.screen.size()
 right_click_time = time.time()
 left_click_time = time.time()
-# print(wScr, hScr)
-# 1920, 1080
+# print(wScr, hScr)  # 1920, 1080
+
+# —— 计算器 & 左手数字识别 —— #
+calc_mode = False
+calc       = None
+left_digit = LeftDigitRecognizer(
+    stable_frames=8,
+    rearm_frames=4,
+    invert_handedness=False,  # 你当前传的是 img（已 flip），False 更合适
+    debug=False
+)
 
 dragging = False
 in_standby = False
@@ -56,11 +70,10 @@ in_standby = False
 ############################################################################
 
 ################################## ↓ Launcher ↓ ##################################
-
 def create_launcher():
     root = tk.Tk()
     root.title("Launcher")
-    root.geometry("160x200+100+600")
+    root.geometry("200x350+100+600")
     root.attributes("-topmost", True)
 
     def toggle_system_keyboard():
@@ -108,11 +121,31 @@ def create_launcher():
         print("Exiting...")
         os._exit(0)
 
-    tk.Button(root, text="Keyboard", height=1, width=10, command=toggle_system_keyboard).pack(pady=5, fill=tk.X)
-    tk.Button(root, text="De-Stress", height=1, width=10, command=open_destress_menu).pack(pady=5, fill=tk.X)
-    vol_btn = tk.Button(root, text="Volume: OFF", height=1, width=10, command=toggle_volume_mode)
+    def open_calculator():
+        # 这些变量在模块级，需要用 global
+        global calc_mode, calc
+        if calc is None:
+            calc = GestureCalculator(master=root, topmost=True)
+
+            # 关闭计算器窗口时，同步 calc_mode=False
+            def _on_calc_close():
+                global calc_mode
+                calc.hide()
+                calc_mode = False
+            try:
+                calc.root.protocol("WM_DELETE_WINDOW", _on_calc_close)
+            except Exception:
+                pass
+        else:
+            calc.show()
+        calc_mode = True
+
+    tk.Button(root, text="Keyboard", height=2, width=10, command=toggle_system_keyboard).pack(pady=5, fill=tk.X)
+    tk.Button(root, text="De-Stress", height=2, width=10, command=open_destress_menu).pack(pady=5, fill=tk.X)
+    tk.Button(root, text="Calculator", height=2, width=10, command=open_calculator).pack(pady=5, fill=tk.X)
+    vol_btn = tk.Button(root, text="Volume: OFF", height=2, width=10, command=toggle_volume_mode)
     vol_btn.pack(pady=5, fill=tk.X)
-    tk.Button(root, text="Exit", height=1, width=10, command=quit_all).pack(pady=5, fill=tk.X)
+    tk.Button(root, text="Exit", height=2, width=10, command=quit_all).pack(pady=5, fill=tk.X)
 
     # F9 切换音量开关（窗口有焦点时）
     root.bind("<F9>", toggle_volume_mode)
@@ -130,28 +163,38 @@ def create_launcher():
 
 # 用线程启动 GUI（非阻塞）
 threading.Thread(target=create_launcher, daemon=True).start()
-
 ################################## ↑ Launcher ↑ ##################################
 
-################################## ↓ 虚拟鼠标 ↓ ##################################
+################################## ↓ 主循环：右手鼠标 + 左手数字 ↓ ##################################
 while True:
-    # 1. Find landmarks
+    # 1) 取帧 & 可视化
     success, img = cap.read()
+    if not success:
+        break
+
+    # HandTrackingModule 里已经水平镜像
     img = detector.findHands(img)
     lmList, bbox = detector.findPositionBox(img)
 
-    # 2. Get the tip of the index and middle fingers
+    # 2) 计算器开着时：仅用左手出“数字”，右手鼠标不受影响
+    if calc_mode and calc is not None:
+        digit = left_digit.update(img)  # 左手：握拳上膛 -> 出一位 -> 再握拳
+        if digit is not None:
+            calc.append_digit(digit)
+            # 小提示：显示一下数字
+            cv2.putText(img, f"Digit:{digit}", (20, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0,165,255), 2)
+
+    # 3) 右手鼠标逻辑（始终可用）
     if len(lmList) != 0:
         x1, y1 = lmList[8][1:]
         x2, y2 = lmList[12][1:]
-        # 3. Check which fingers are up
-        fingers = detector.fingersUp()
-        # print(fingers)
+
+        fingers = detector.fingersUp()  # [thumb, index, middle, ring, pinky]
         cv2.rectangle(img, (frameR, frameR), (wCam - frameR, hCam - frameR), (200, 0, 200), 2)
 
-        # —— 音量控制（仅在开关打开且 pycaw 可用；算法 100~270 → 0..1）——
+        # —— 音量控制（仅在开关打开且 pycaw 可用）——
         if volume_mode and _PYCAW_OK:
-            # 手势：拇指+食指伸出，其它尽量收（避免和现有右键/双击/滚动冲突）
+            # 手势：拇指+食指伸出，其它尽量收
             if fingers == [1, 1, 0, 0, 0]:
                 d, img, _ = detector.findDistance(4, 8, img)  # 拇指尖(4) - 食指尖(8)
                 vol_scalar = np.interp(d, [100, 270], [0.0, 1.0])
@@ -159,9 +202,9 @@ while True:
                 try:
                     endpoint.SetMasterVolumeLevelScalar(vol_scalar, None)
                 except Exception:
-                    pass  # 防止偶发 COM 异常中断
+                    pass
 
-                # 画面提示（侧边条与百分比）
+                # 画面提示
                 vol_per = int(vol_scalar * 100)
                 cv2.putText(img, "Mode: VOLUME", (400, 90), cv2.FONT_HERSHEY_SIMPLEX,
                             0.5, (0, 0, 0), 2)
@@ -175,26 +218,25 @@ while True:
         if fingers == [1, 1, 1, 1, 1]:  # 伸出五指，待机状态
             in_standby = True
             if dragging:
-                pyautogui.mouseUp() # 释放左键
+                pyautogui.mouseUp()  # 释放左键
                 dragging = False
-            cv2.putText(img, f"Mode: MOUSE - Standby", (400, 80), cv2.FONT_HERSHEY_SIMPLEX,
+            cv2.putText(img, "Mode: MOUSE - Standby", (400, 80), cv2.FONT_HERSHEY_SIMPLEX,
                         0.5, (0, 0, 0), 2)
 
         elif fingers == [0, 0, 0, 0, 0] and in_standby and not dragging:
             pyautogui.mouseDown()   # 按下左键
             dragging = True
             in_standby = False  # 退出待机状态
-            cv2.putText(img, f"Mode: MOUSE - Dragging", (400, 80), cv2.FONT_HERSHEY_SIMPLEX,
+            cv2.putText(img, "Mode: MOUSE - Dragging", (400, 80), cv2.FONT_HERSHEY_SIMPLEX,
                         0.5, (0, 0, 0), 2)
 
         if dragging:
-            # 拖拽中但没有收拳，显示模式
-            cv2.putText(img, f"Mode: MOUSE - Dragging", (400, 80), cv2.FONT_HERSHEY_SIMPLEX,
+            cv2.putText(img, "Mode: MOUSE - Dragging", (400, 80), cv2.FONT_HERSHEY_SIMPLEX,
                         0.5, (0, 0, 0), 2)
 
         # 右键：食指 + 中指
         if fingers[0] == 1 and fingers[1] == 1 and fingers[2] == 1 and fingers[3] == 0 and fingers[4] == 0:
-            cv2.putText(img, f"Mode: MOUSE - Right Click", (400, 50), cv2.FONT_HERSHEY_SIMPLEX,
+            cv2.putText(img, "Mode: MOUSE - Right Click", (400, 50), cv2.FONT_HERSHEY_SIMPLEX,
                         0.5, (0, 0, 0), 2)
             index_middle_len, img, lineInfo = detector.findDistance(8, 12, img)
             if index_middle_len < 25:
@@ -205,7 +247,7 @@ while True:
 
         # 左键：拇指 + 食指
         if fingers[0] == 0 and fingers[1] == 1 and fingers[2] == 1 and fingers[3] == 0 and fingers[4] == 0:
-            cv2.putText(img, f"Mode: MOUSE - Left Click", (400, 50), cv2.FONT_HERSHEY_SIMPLEX,
+            cv2.putText(img, "Mode: MOUSE - Left Click", (400, 50), cv2.FONT_HERSHEY_SIMPLEX,
                         0.5, (0, 0, 0), 2)
             d2, img, lineInfo = detector.findDistance(8, 12, img)
             if d2 < 30:
@@ -216,7 +258,7 @@ while True:
 
         # 左键双击：食指 + 中指 + 无名指靠近（无拇指）
         if fingers == [0, 1, 1, 1, 0]:
-            d1, img, _ = detector.findDistance(8, 12, img)  # 食指-中指
+            d1, img, _ = detector.findDistance(8, 12, img)   # 食指-中指
             d2, img, _ = detector.findDistance(12, 16, img)  # 中指-无名指
             cv2.putText(img, "Double Click", (400, 70), cv2.FONT_HERSHEY_SIMPLEX,
                         0.5, (0, 0, 0), 2)
@@ -227,25 +269,25 @@ while True:
 
         # 滚动：小拇指向上或向下
         if fingers[0] == 0 and fingers[1] == 0 and fingers[2] == 0 and fingers[3] == 0 and fingers[4] == 1:
-            cv2.putText(img, f"Mode: MOUSE - Scroll", (400, 50), cv2.FONT_HERSHEY_SIMPLEX,
+            cv2.putText(img, "Mode: MOUSE - Scroll", (400, 50), cv2.FONT_HERSHEY_SIMPLEX,
                         0.5, (0, 0, 0), 2)
             pinky_x, pinky_y = lmList[20][1:]
             upper_threshold = 160   # 举得比较高（往上滚）
             lower_threshold = 300   # 放得比较低（往下滚）
-            scroll_speed = 100   # 可调节滚动速度
+            scroll_speed = 100      # 可调节滚动速度
             cv2.circle(img, (pinky_x, pinky_y), 12, (125, 0, 125), cv2.FILLED)
             if pinky_y < upper_threshold:
                 pyautogui.scroll(scroll_speed)  # 往上滚
-                cv2.putText(img, f"SCROLL UP", (400, 70), cv2.FONT_HERSHEY_SIMPLEX,
+                cv2.putText(img, "SCROLL UP", (400, 70), cv2.FONT_HERSHEY_SIMPLEX,
                             0.5, (0, 0, 0), 2)
             elif pinky_y > lower_threshold:
                 pyautogui.scroll(-scroll_speed) # 往下滚
-                cv2.putText(img, f"SCROLL DOWN", (400, 70), cv2.FONT_HERSHEY_SIMPLEX,
+                cv2.putText(img, "SCROLL DOWN", (400, 70), cv2.FONT_HERSHEY_SIMPLEX,
                             0.5, (0, 0, 0), 2)
 
         # 鼠标移动：食指
         if fingers[0] == 0 and fingers[1] == 1 and fingers[2] == 0 and fingers[3] == 0 and fingers[4] == 0:
-            cv2.putText(img, f"Mode: MOUSE - Moving", (400, 50), cv2.FONT_HERSHEY_SIMPLEX,
+            cv2.putText(img, "Mode: MOUSE - Moving", (400, 50), cv2.FONT_HERSHEY_SIMPLEX,
                         0.5, (0, 0, 0), 2)
             x3 = np.interp(x1, (frameR, wCam - frameR), (0, wScr))
             y3 = np.interp(y1, (frameR, hCam - frameR), (0, hScr))
@@ -257,26 +299,24 @@ while True:
             cv2.circle(img, (x1, y1), 12, (125, 0, 125), cv2.FILLED)
             plocX, plocY = clocX, clocY
 
-        # 出界监测
+        # 出界监测（参考点依你现有习惯）
         margin = 50
         ref_x, ref_y = None, None
-        if fingers == [0, 1, 0, 0, 0]:  # 移动用食指
+        if fingers == [0, 1, 0, 0, 0]:        # 移动用食指
             ref_x, ref_y = lmList[8][1:]
-        elif fingers == [0, 0, 0, 0, 1]:  # 滚动用小拇指
+        elif fingers == [0, 0, 0, 0, 1]:      # 滚动用小拇指
             ref_x, ref_y = lmList[20][1:]
-        elif fingers == [0, 1, 1, 0, 0]:  # 右键
+        elif fingers == [0, 1, 1, 0, 0]:      # 右键
             ref_x, ref_y = lmList[12][1:]
-        elif fingers == [1, 1, 0, 0, 0]:  # 左键
-            ref_x, ref_y = lmList[4][1:]
-        elif fingers == [0, 1, 1, 1, 0]:  # 左键双击
+        elif fingers == [0, 1, 1, 1, 0]:      # 左键双击
             ref_x, ref_y = lmList[12][1:]
-        elif dragging:  # 拖拽
+        elif dragging:                        # 拖拽
             ref_x, ref_y = lmList[0][1:]
 
         if ref_x is not None:
             out_of_bounds = (
-                    ref_x < frameR - margin or ref_x > wCam - frameR + margin or
-                    ref_y < frameR - margin or ref_y > hCam - frameR + margin
+                ref_x < frameR - margin or ref_x > wCam - frameR + margin or
+                ref_y < frameR - margin or ref_y > hCam - frameR + margin
             )
             if out_of_bounds and not warning_active:
                 warning_image[:] = 0
@@ -288,20 +328,28 @@ while True:
                 cv2.destroyWindow("Warning")
                 warning_active = False
 
-    ################################## ↑虚拟鼠标↑ ##################################
-
-    # Frame Rate
+    # 4) 帧率 & 模式标签（仅显示计算器是否开启）
     cTime = time.time()
-    fps = 1 / (cTime - pTime)
+    fps = 1 / (cTime - pTime) if cTime != pTime else 0
     pTime = cTime
     cv2.putText(img, f'FPS: {int(fps)}', (40, 30), cv2.FONT_HERSHEY_COMPLEX,
                 0.5, (0, 0, 255), 2)
-    cv2.putText(img, f"Mode: MOUSE", (400, 30), cv2.FONT_HERSHEY_SIMPLEX,
-                0.5, (0, 0, 0), 2)
+    if calc_mode:
+        cv2.putText(img, f"Mode: CALC (Left hand digits)", (360, 30),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 2)
+    else:
+        cv2.putText(img, "Mode: MOUSE", (400, 30),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 2)
 
-    # Display
+    # 显示
     cv2.imshow("Frame", img)
 
-    # press 'Q' to exit
-    if cv2.waitKey(1) & 0xFF == ord('q'):
+    # 键盘控制
+    key = cv2.waitKey(1) & 0xFF
+    if key == ord('v') and calc_mode:
+        calc_mode = False
+        if calc:
+            calc.hide()
+    if key == ord('q'):
         break
+################################## ↑ 主循环 ↑ ##################################
