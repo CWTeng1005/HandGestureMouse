@@ -25,7 +25,7 @@
   - [x] menu
   - [x] virtual keyboard
 - [x] ASMR Mixer
-- [ ] Simple Calculator
+- [x] Simple Calculator
 
 ---  
 ## Reference:  
