@@ -15,7 +15,6 @@
 - [x] Volume Hand Control
 - [x] Left Digit Controller
 - [x] AI Virtual Mouse
-<<<<<<< HEAD
   - [x] Move
   - [x] Detection of Out of Control Zone
   - [x] Left Click
@@ -28,20 +27,6 @@
   - [x] Keyboard
   - [x] ASMR Mixer
   - [x] Gesture Calculator
-=======
-  - [x] move
-  - [x] detection of out of control zone
-  - [x] left click
-  - [x] right click
-  - [x] double click
-  - [x] scroll up
-  - [x] scroll down
-  - [x] drag
-  - [x] menu
-  - [x] virtual keyboard
-- [x] ASMR Mixer
-- [x] Simple Calculator
->>>>>>> 0699b104828e1aa6b2b52042116277d7967ef325
 
 ---  
 ## Reference:  
