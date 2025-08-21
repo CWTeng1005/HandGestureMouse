@@ -1,6 +1,5 @@
 import cv2
 import numpy as np
-import HandTrackingModule as htm
 import time
 import autopy
 import pyautogui
@@ -9,9 +8,9 @@ import tkinter as tk
 import os
 import subprocess
 import psutil
-
+import HandTrackingModule as htm
 from gesture_calculator import GestureCalculator
-from left_digit_controller import LeftDigitRecognizer   # ← 新：左手数字识别
+from left_digit_controller import LeftDigitRecognizer
 
 ################################## ↓ 音量控制 ↓ ##################################
 try:
@@ -33,7 +32,7 @@ if _PYCAW_OK:
         _PYCAW_OK = False
 ################################## ↑ 音量控制 ↑ ##################################
 
-############################################################################
+##################################################################################
 wCam, hCam = 640, 480
 frameR = 120  # frame reduction
 smoothening = 4
@@ -60,14 +59,14 @@ calc       = None
 left_digit = LeftDigitRecognizer(
     stable_frames=8,
     rearm_frames=4,
-    invert_handedness=False,  # 你当前传的是 img（已 flip），False 更合适
+    invert_handedness=False,
     debug=False
 )
 
 dragging = False
 in_standby = False
 
-############################################################################
+##################################################################################
 
 ################################## ↓ Launcher ↓ ##################################
 def create_launcher():

@@ -20,6 +20,7 @@ def fingers_up(lm, handedness: str):
     return [T, I, M, R, P]
 
 # 左手数字规则
+# T, I, M, R, P --> 拇指，食指，中指，无名指，小指
 DIGIT_RULES = {
     1: dict(up=set("I"),     down=set("TMRP")),
     2: dict(up=set("IM"),    down=set("TRP")),
@@ -37,7 +38,7 @@ class LeftDigitRecognizer:
     """
     左手专用数字识别（右手继续当鼠标）。
     流程极简：
-      - 必须先“左手全收拳(0 指)”连续 rearm_frames 帧 上膛
+      - 必须先“左手全收拳”连续 rearm_frames 帧 上膛
       - 上膛后做一个数字手势；稳定 stable_frames 帧后仅输出一位
       - 输出后立刻关闸；必须再次全收拳才能继续下一位
     """
@@ -74,7 +75,7 @@ class LeftDigitRecognizer:
 
     def update(self, bgr_image):
         """
-        输入：BGR 帧（建议传你现在的 img）
+        输入：BGR 帧
         输出：digit（int 或 None）
         """
         h, w = bgr_image.shape[:2]
@@ -96,7 +97,7 @@ class LeftDigitRecognizer:
             self.rearm_hist.clear()
             return None
 
-        # 上膛：全收拳(0 指) 连续 N 帧
+        # 上膛：全收拳 连续 N 帧
         cnt = sum(fingers_up(left_lm, "Left"))
         self.rearm_hist.append(cnt == 0)
         if len(self.rearm_hist) == self.rearm_hist.maxlen and all(self.rearm_hist):
