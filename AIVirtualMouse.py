@@ -8,9 +8,11 @@ import tkinter as tk
 import os
 import subprocess
 import psutil
+
 import HandTrackingModule as htm
 from gesture_calculator import GestureCalculator
 from left_digit_controller import LeftDigitRecognizer
+import usage_guide
 
 ################################## ↓ 音量控制 ↓ ##################################
 try:
@@ -21,7 +23,6 @@ try:
 except Exception:
     _PYCAW_OK = False
 
-# 开关与接口
 volume_mode = False
 if _PYCAW_OK:
     try:
@@ -43,11 +44,14 @@ plocX, plocY = 0, 0
 clocX, clocY = 0, 0
 warning_image = np.zeros((100, 400, 3), dtype=np.uint8)
 
+# 新增：快速指南开关（H 键）
+show_quick_guide = False
+
 cap = cv2.VideoCapture(0)
 cap.set(3, wCam)
 cap.set(4, hCam)
 
-detector = htm.handDetector(maxHands=1)  # 右手鼠标用；左手数字由 LeftDigitRecognizer 自己跑
+detector = htm.handDetector(maxHands=1)  # 保持回退版：右手鼠标用；左手数字由 LeftDigitRecognizer 自己跑
 wScr, hScr = autopy.screen.size()
 right_click_time = time.time()
 left_click_time = time.time()
@@ -59,20 +63,23 @@ calc       = None
 left_digit = LeftDigitRecognizer(
     stable_frames=8,
     rearm_frames=4,
-    invert_handedness=False,
+    invert_handedness=False,   # 保持回退版
     debug=False
 )
 
 dragging = False
 in_standby = False
 
+min_vol_range = 20
+max_vol_range = 120
+
 ##################################################################################
 
-################################## ↓ Launcher ↓ ##################################
+################################## ↓ UI Launcher ↓ ##################################
 def create_launcher():
     root = tk.Tk()
     root.title("Launcher")
-    root.geometry("200x350+100+600")
+    root.geometry("220x400+1000+200")
     root.attributes("-topmost", True)
 
     def toggle_system_keyboard():
@@ -82,7 +89,7 @@ def create_launcher():
                 return
         subprocess.Popen(["explorer.exe", r"C:\Program Files\Common Files\Microsoft Shared\ink\TabTip.exe"])
 
-    # 后台线程启动 ASMR Mixer，避免阻塞 Launcher
+    # 后台线程启动游戏
     def run_asmr_mixer():
         def _run():
             try:
@@ -96,37 +103,18 @@ def create_launcher():
     def run_sand_flow():
         print("Sand Flow Launched.")  # 占位
 
-    # 音量控制开关按钮 & F9 快捷键
+    # 音量按钮（保持原逻辑；先不改成左手）
     def toggle_volume_mode(event=None):
         global volume_mode
         volume_mode = not volume_mode
         print(f"[VolumeMode] -> {volume_mode}")
         vol_btn.config(text=f"Volume: {'ON' if volume_mode else 'OFF'}")
 
-    def open_destress_menu():
-        menu = tk.Toplevel(root)
-        menu.title("De-Stress Games")
-        menu.geometry("200x150+400+600")
-        menu.attributes("-topmost", True)
-
-        def return_launcher():
-            menu.destroy()
-
-        tk.Button(menu, text="ASMR Mixer", width=15, command=run_asmr_mixer).pack(pady=5)
-        tk.Button(menu, text="Sand Flow", width=15, command=run_sand_flow).pack(pady=5)
-        tk.Button(menu, text="Return", width=15, command=return_launcher).pack(pady=5)
-
-    def quit_all():
-        print("Exiting...")
-        os._exit(0)
-
+    # 打开计算器
     def open_calculator():
-        # 这些变量在模块级，需要用 global
         global calc_mode, calc
         if calc is None:
             calc = GestureCalculator(master=root, topmost=True)
-
-            # 关闭计算器窗口时，同步 calc_mode=False
             def _on_calc_close():
                 global calc_mode
                 calc.hide()
@@ -139,12 +127,20 @@ def create_launcher():
             calc.show()
         calc_mode = True
 
-    tk.Button(root, text="Keyboard", height=2, width=10, command=toggle_system_keyboard).pack(pady=5, fill=tk.X)
-    tk.Button(root, text="De-Stress", height=2, width=10, command=open_destress_menu).pack(pady=5, fill=tk.X)
-    tk.Button(root, text="Calculator", height=2, width=10, command=open_calculator).pack(pady=5, fill=tk.X)
-    vol_btn = tk.Button(root, text="Volume: OFF", height=2, width=10, command=toggle_volume_mode)
+    # 打开详细用户指南（使用 usage_guide.py）
+    def open_user_guide():
+        try:
+            usage_guide.open_detailed_guide(root)
+        except Exception as e:
+            print("open_detailed_guide error:", e)
+
+    tk.Button(root, text="Keyboard (TabTip)", height=2, command=toggle_system_keyboard).pack(pady=5, fill=tk.X)
+    tk.Button(root, text="De-Stress Games",   height=2, command=run_asmr_mixer).pack(pady=5, fill=tk.X)
+    tk.Button(root, text="Calculator (C)",    height=2, command=open_calculator).pack(pady=5, fill=tk.X)
+    tk.Button(root, text="User Guide",        height=2, command=open_user_guide).pack(pady=5, fill=tk.X)
+    vol_btn = tk.Button(root, text="Volume: OFF", height=2, command=toggle_volume_mode, state=("normal" if _PYCAW_OK else "disabled"))
     vol_btn.pack(pady=5, fill=tk.X)
-    tk.Button(root, text="Exit", height=2, width=10, command=quit_all).pack(pady=5, fill=tk.X)
+    tk.Button(root, text="Exit (Q)",          height=2, command=lambda: os._exit(0)).pack(pady=5, fill=tk.X)
 
     # F9 切换音量开关（窗口有焦点时）
     root.bind("<F9>", toggle_volume_mode)
@@ -162,7 +158,7 @@ def create_launcher():
 
 # 用线程启动 GUI（非阻塞）
 threading.Thread(target=create_launcher, daemon=True).start()
-################################## ↑ Launcher ↑ ##################################
+################################## ↑ UI Launcher ↑ ##################################
 
 ################################## ↓ 主循环：右手鼠标 + 左手数字 ↓ ##################################
 while True:
@@ -183,7 +179,7 @@ while True:
             # 小提示：显示一下数字
             cv2.putText(img, f"Digit:{digit}", (20, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0,165,255), 2)
 
-    # 3) 右手鼠标逻辑（始终可用）
+    # 3) 右手鼠标逻辑（保持回退版）
     if len(lmList) != 0:
         x1, y1 = lmList[8][1:]
         x2, y2 = lmList[12][1:]
@@ -191,12 +187,11 @@ while True:
         fingers = detector.fingersUp()  # [thumb, index, middle, ring, pinky]
         cv2.rectangle(img, (frameR, frameR), (wCam - frameR, hCam - frameR), (200, 0, 200), 2)
 
-        # —— 音量控制（仅在开关打开且 pycaw 可用）——
+        # —— 音量控制（保持回退版的“右手拇指+食指”触发）——
         if volume_mode and _PYCAW_OK:
-            # 手势：拇指+食指伸出，其它尽量收
             if fingers == [1, 1, 0, 0, 0]:
                 d, img, _ = detector.findDistance(4, 8, img)  # 拇指尖(4) - 食指尖(8)
-                vol_scalar = np.interp(d, [100, 270], [0.0, 1.0])
+                vol_scalar = np.interp(d, [min_vol_range, max_vol_range], [0.0, 1.0])
                 vol_scalar = float(np.clip(vol_scalar, 0.0, 1.0))
                 try:
                     endpoint.SetMasterVolumeLevelScalar(vol_scalar, None)
@@ -208,7 +203,7 @@ while True:
                 cv2.putText(img, "Mode: VOLUME", (400, 90), cv2.FONT_HERSHEY_SIMPLEX,
                             0.5, (0, 0, 0), 2)
                 cv2.rectangle(img, (50, 147), (60, 403), (0, 0, 0), 2)
-                bar_y = int(np.interp(d, [100, 270], [400, 150]))
+                bar_y = int(np.interp(d, [min_vol_range, max_vol_range], [400, 150]))
                 cv2.rectangle(img, (53, bar_y), (57, 400), (255, 255, 255), cv2.FILLED)
                 cv2.putText(img, f'{vol_per} %', (40, 450), cv2.FONT_HERSHEY_COMPLEX,
                             1, (255, 255, 255), 2)
@@ -298,7 +293,7 @@ while True:
             cv2.circle(img, (x1, y1), 12, (125, 0, 125), cv2.FILLED)
             plocX, plocY = clocX, clocY
 
-        # 出界监测（参考点依你现有习惯）
+        # 出界监测
         margin = 50
         ref_x, ref_y = None, None
         if fingers == [0, 1, 0, 0, 0]:        # 移动用食指
@@ -327,11 +322,11 @@ while True:
                 cv2.destroyWindow("Warning")
                 warning_active = False
 
-    # 4) 帧率 & 模式标签（仅显示计算器是否开启）
+    # 4) 帧率 & 模式标签
     cTime = time.time()
     fps = 1 / (cTime - pTime) if cTime != pTime else 0
     pTime = cTime
-    cv2.putText(img, f'FPS: {int(fps)}', (40, 30), cv2.FONT_HERSHEY_COMPLEX,
+    cv2.putText(img, f'FPS: {int(fps)}', (18, 26), cv2.FONT_HERSHEY_COMPLEX,
                 0.5, (0, 0, 255), 2)
     if calc_mode:
         cv2.putText(img, f"Mode: CALC (Left hand digits)", (360, 30),
@@ -340,15 +335,39 @@ while True:
         cv2.putText(img, "Mode: MOUSE", (400, 30),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 2)
 
+    # 快速指南（H 键）
+    if show_quick_guide:
+        try:
+            usage_guide.draw_quick_guide(img, corner="tr", margin=(14, 46), alpha=0.88)
+        except Exception as e:
+            pass
+
     # 显示
     cv2.imshow("Frame", img)
 
     # 键盘控制
     key = cv2.waitKey(1) & 0xFF
+    # 兼容你原先：按 v 关闭计算器
     if key == ord('v') and calc_mode:
         calc_mode = False
         if calc:
             calc.hide()
+    # 新增：按 c 显示/隐藏计算器
+    if key == ord('c'):
+        if calc is None:
+            calc = GestureCalculator(master=None, topmost=True)
+        if calc_mode:
+            calc.hide()
+            calc_mode = False
+        else:
+            calc.show()
+            calc_mode = True
+    # 显示/隐藏快速指南
+    if key == ord('h'):
+        show_quick_guide = not show_quick_guide
     if key == ord('q'):
         break
 ################################## ↑ 主循环 ↑ ##################################
+
+cap.release()
+cv2.destroyAllWindows()
