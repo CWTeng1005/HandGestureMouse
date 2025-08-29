@@ -135,7 +135,7 @@ def create_launcher():
             print("open_detailed_guide error:", e)
 
     tk.Button(root, text="Keyboard (TabTip)", height=2, command=toggle_system_keyboard).pack(pady=5, fill=tk.X)
-    tk.Button(root, text="De-Stress Games",   height=2, command=run_asmr_mixer).pack(pady=5, fill=tk.X)
+    tk.Button(root, text="ASMR Mixer",        height=2, command=run_asmr_mixer).pack(pady=5, fill=tk.X)
     tk.Button(root, text="Calculator (C)",    height=2, command=open_calculator).pack(pady=5, fill=tk.X)
     tk.Button(root, text="User Guide",        height=2, command=open_user_guide).pack(pady=5, fill=tk.X)
     vol_btn = tk.Button(root, text="Volume: OFF", height=2, command=toggle_volume_mode, state=("normal" if _PYCAW_OK else "disabled"))

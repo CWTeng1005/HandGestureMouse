@@ -1,7 +1,14 @@
+
 import pygame
 import threading
 import os
 import random
+import sys  # <-- added
+
+# -------- helper for PyInstaller bundled data (UI-PRESERVING) --------
+def resource_path(rel_path):
+    base = getattr(sys, "_MEIPASS", os.path.dirname(__file__))
+    return os.path.join(base, rel_path)
 
 # 初始化 pygame
 pygame.init()
@@ -19,12 +26,13 @@ win32gui.SetWindowLong(hwnd, win32con.GWL_EXSTYLE,
                         win32gui.GetWindowLong(hwnd, win32con.GWL_EXSTYLE) | win32con.WS_EX_LAYERED | win32con.WS_EX_TOPMOST)
 win32gui.SetLayeredWindowAttributes(hwnd, 0x000000, 255, win32con.LWA_COLORKEY)
 
-# 加载音效
+# 加载音效（仅改动路径解析，UI 逻辑完全不变）
 SOUND_FOLDER = 'SE'
 SOUND_FILES = [
     'books.mp3', 'bubbles.mp3', 'fire.mp3', 'ocean.mp3', 'rain.mp3', 'river.mp3', 'windbell.mp3'
 ]
-SOUND_PATHS = [os.path.join(SOUND_FOLDER, f) for f in SOUND_FILES]
+# 原来: SOUND_PATHS = [os.path.join(SOUND_FOLDER, f) for f in SOUND_FILES]
+SOUND_PATHS = [resource_path(os.path.join(SOUND_FOLDER, f)) for f in SOUND_FILES]
 SOUND_EMOJIS = ['📚', '🫧', '🔥', '🌊', '🌧️', '🏞️', '🎐']
 
 # 播放器和状态
@@ -51,7 +59,7 @@ for i in range(7):
 
 def play_sound(index):
     if effect_players[index] is None:
-        effect_players[index] = pygame.mixer.Sound(SOUND_PATHS[index])
+        effect_players[index] = pygame.mixer.Sound(SOUND_PATHS[index])  # 仅路径变化
         effect_players[index].set_volume(0.8)
     if SOUND_FILES[index] not in active_sounds:
         if len(active_sounds) >= 3:
@@ -77,7 +85,7 @@ def run_game():
     while running:
         screen.fill((0, 0, 0))
 
-        # 画线条和emoji
+        # 画线条和emoji（完全保留原有 UI 和逻辑）
         for i, line in enumerate(lines):
             sound_name = SOUND_FILES[i]
             persistent = sound_name in active_sounds

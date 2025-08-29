@@ -19,16 +19,15 @@ detector = htm.handDetector(maxHands=1, detectionCon=0.7)
 devices = AudioUtilities.GetSpeakers()
 interface =  devices.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
 volume = cast(interface, POINTER(IAudioEndpointVolume))
-# volume.GetMute()
-# volume.GetMasterVolumeLevel()
 volRange = volume.GetVolumeRange()
 print(volRange)
-# (-96.0, 0.0, 0.125)
 minVol = -25
 maxVol = volRange[1]
 vol = 0
 volBar = 400
 volPer = 0
+min_vol_range = 20
+max_vol_range = 100
 
 while True:
     success, img = cap.read()
@@ -36,8 +35,6 @@ while True:
     lmList = detector.findPosition(img, draw=False)
     volume.SetMasterVolumeLevelScalar(0, None)  # 安全默认值
     if len(lmList) != 0:
-        # print(lmList[4], lmList[8])
-
         x1, y1 = lmList[4][1], lmList[4][2]
         x2, y2 = lmList[8][1], lmList[8][2]
         cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
@@ -48,21 +45,13 @@ while True:
         cv2.circle(img, (cx, cy), 15, (255, 0, 0), cv2.FILLED)
 
         length = math.hypot(x2 - x1, y2 - y1)
-        # print(length)
 
-        # Hand range: 50 ~ 300
-        # Volume range: -96 ~ 0
-
-        # vol = np.interp(length, [100, 270], [minVol, maxVol])
-        # volBar = np.interp(length, [100, 270], [400, 150])
-        # volPer = np.interp(length, [100, 270], [0, 100])
-        volPer = np.interp(length, [100, 270], [0, 100]) # 画面音量
-        volScalar = np.interp(length, [100, 270], [0.0, 1.0]) # 实际系统音量
+        volPer = np.interp(length, [min_vol_range, max_vol_range], [0, 100]) # 画面音量
+        volScalar = np.interp(length, [min_vol_range, max_vol_range], [0.0, 1.0]) # 实际系统音量
         volScalar = np.clip(volScalar, 0.0, 1.0) # 防止过界
         volume.SetMasterVolumeLevelScalar(volScalar, None)
-        volBar = np.interp(length, [100, 270], [400, 150])
+        volBar = np.interp(length, [min_vol_range, max_vol_range], [400, 150])
         print(int(length), f"Volume %: {int(volPer)}")
-        # volume.SetMasterVolumeLevel(vol, None)
 
         if length < 50:
             cv2.circle(img, (cx, cy), 15, (255, 0, 255), cv2.FILLED)
