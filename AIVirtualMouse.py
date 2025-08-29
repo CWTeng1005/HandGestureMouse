@@ -79,7 +79,7 @@ max_vol_range = 120
 def create_launcher():
     root = tk.Tk()
     root.title("Launcher")
-    root.geometry("220x400+1000+200")
+    root.geometry("400x400+1000+200")
     root.attributes("-topmost", True)
 
     def toggle_system_keyboard():
